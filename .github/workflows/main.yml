@@ -1,0 +1,65 @@
+name: Build Unsigned IPA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+
+    - name: Install Xcode Command Line Tools
+      run: xcode-select --install
+
+    - name: Install Dependencies
+      run: |
+        brew install openssl xquartz node
+        sudo npm install -g npm@latest
+
+    - name: Download xcFrameworks
+      run: ./downloadFrameworks.sh
+
+    - name: Change directory to cpython
+      run: cd cpython
+
+    - name: Build Python 3.11 and associated libraries
+      run: sh ./downloadAndCompile.sh
+
+    - name: Generate a temporary scheme for the project
+      run: |
+        xcodebuild -project a-Shell.xcodeproj -list
+        SCHEME_NAME="TemporaryScheme"
+        xcodebuild -project a-Shell.xcodeproj -scheme $SCHEME_NAME -alltargets
+
+    - name: Build the Xcode Project without signing
+      run: |
+        xcodebuild -project a-Shell.xcodeproj \
+                   -scheme $SCHEME_NAME \
+                   -sdk iphoneos \
+                   -configuration Release \
+                   CODE_SIGN_IDENTITY="" \
+                   CODE_SIGNING_REQUIRED=NO \
+                   CODE_SIGNING_ALLOWED=NO \
+                   build
+
+    - name: Create an unsigned IPA
+      run: |
+        xcodebuild -exportArchive \
+                   -archivePath $PWD/build/$SCHEME_NAME.xcarchive \
+                   -exportOptionsPlist exportOptions.plist \
+                   -exportPath $PWD/build/$SCHEME_NAME.ipa \
+                   CODE_SIGN_IDENTITY="" \
+                   CODE_SIGNING_REQUIRED=NO
+
+    - name: Archive IPA
+      uses: actions/upload-artifact@v2
+      with:
+        name: Unsigned-IPA
+        path: $PWD/build/$SCHEME_NAME.ipa
