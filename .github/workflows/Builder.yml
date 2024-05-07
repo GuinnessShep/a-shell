@@ -12,6 +12,12 @@ jobs:
       with:
         submodules: 'recursive'
 
+    - name: Synchronize submodules
+      run: git submodule sync --recursive
+
+    - name: Update submodules
+      run: git submodule update --init --recursive --force
+
     - name: Install Xcode Command Line Tools
       run: xcode-select --install
 
